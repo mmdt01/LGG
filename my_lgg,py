@@ -1,0 +1,44 @@
+
+import torch
+from networks import LGGNet
+
+original_order = ['Fp1', 'AF3', 'F3', 'F7', 'FC5', 'FC1', 'C3', 'T7', 'CP5', 'CP1', 'P3', 'P7', 'PO3', 'O1', 'Oz',
+                  'Pz', 'Fp2', 'AF4', 'Fz', 'F4', 'F8', 'FC6', 'FC2', 'Cz', 'C4', 'T8', 'CP6', 'CP2', 'P4', 'P8',
+                  'PO4', 'O2'] # 32 channels
+
+# Define proper channel orders for the local-global graphs in LGGNet. Please refer to three graph definitions (general, frontal, hemesphere).
+graph_general_DEAP = [['Fp1', 'Fp2'], ['AF3', 'AF4'], ['F3', 'F7', 'Fz', 'F4', 'F8'],
+                     ['FC5', 'FC1', 'FC6', 'FC2'], ['C3', 'Cz', 'C4'], ['CP5', 'CP1', 'CP2', 'CP6'],
+                     ['P7', 'P3', 'Pz', 'P4', 'P8'], ['PO3', 'PO4'], ['O1', 'Oz', 'O2'],
+                     ['T7'], ['T8']]
+
+graph_idx = graph_general_DEAP   # The general graph definition for DEAP is used as an example.
+idx = []
+num_chan_local_graph = []
+for i in range(len(graph_idx)):
+    num_chan_local_graph.append(len(graph_idx[i]))
+    for chan in graph_idx[i]:
+        idx.append(original_order.index(chan))
+
+# for my understanding
+print('idx:', idx)
+print('num_chan_local_graph:', num_chan_local_graph)
+
+data = torch.randn(1, 1, 32, 512)  # (batch_size=1, cnn_channel=1, EEG_channel=32, data_points=512)
+print('data:', data.shape)
+data = data[:, :, idx, :]  # (batch_size=1, cnn_channel=1, EEG_channel=32, data_points=512)
+print('data:', data.shape)
+
+LGG = LGGNet(
+    num_classes=2,
+    input_size=(1, 32, 512),
+    sampling_rate=128,
+    num_T=64,  # num_T controls the number of temporal filters
+    out_graph=32,
+    pool=16,
+    pool_step_rate=0.25,
+    idx_graph=num_chan_local_graph,
+    dropout_rate=0.5
+)
+
+preds = LGG(data)
