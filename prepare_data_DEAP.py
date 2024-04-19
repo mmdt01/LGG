@@ -17,9 +17,21 @@ class PrepareData:
         self.data_path = args.data_path
         self.file_name = args.file_name
         # self.label_type = args.label_type
-        self.original_order = ['Fp1', 'AF3', 'F3', 'F7', 'FC5', 'FC1', 'C3', 'T7', 'CP5', 'CP1', 'P3', 'P7', 'PO3',
-                               'O1', 'Oz', 'Pz', 'Fp2', 'AF4', 'Fz', 'F4', 'F8', 'FC6', 'FC2', 'Cz', 'C4', 'T8', 'CP6',
-                               'CP2', 'P4', 'P8', 'PO4', 'O2']
+
+        # self.original_order = ['Fp1', 'AF3', 'F3', 'F7', 'FC5', 'FC1', 'C3', 'T7', 'CP5', 'CP1', 'P3', 'P7', 'PO3',
+        #                        'O1', 'Oz', 'Pz', 'Fp2', 'AF4', 'Fz', 'F4', 'F8', 'FC6', 'FC2', 'Cz', 'C4', 'T8', 'CP6',
+        #                        'CP2', 'P4', 'P8', 'PO4', 'O2']
+        
+        self.original_order = ['AF3', 'FPz', 'AF4', 'F9', 'F7', 'FC4', 'F10', 'T7', 'F5', 'F3', 'F1', 'Fz', 'F2', 'F4', 'F6', 'F8', 'CP5', 
+                  'FT7', 'FC5', 'FC3', 'FC1', 'FCz', 'FC2', 'FC6', 'FT8', 'C2', 'Cz', 'C1', 'POz', 'CP2', 'CP4', 'CP6', 'C6', 'T8', 'TP7', 'CP3',
+                  'CP1', 'CPz', 'Pz', 'P4', 'P2', 'TP10', 'TP8', 'P5', 'P3', 'P1', 'PO3', 'PO10', 'P6', 'P8', 'PO4', 'P10', 'P9', 'P7', 'PO7', 'O2', 
+                  'Oz', 'PO9', 'FT9', 'PO8', 'C5', 'FT10', 'TP9', 'O1']
+        
+        self.graph_novel = [['AF3', 'FPz', 'AF4'], ['F9', 'F7', 'F5', 'F3', 'FT9', 'FT7'], ['F4', 'F6', 'F8', 'F10', 'FT8', 'FT10'], 
+                            ['F1', 'Fz', 'F2', 'FC1', 'FCz', 'FC2'], ['FC5', 'FC3'], ['FC4', 'FC6'], ['C5', 'C1', 'Cz', 'C2', 'C6'], 
+                            ['CP5', 'CP3', 'CP1', 'CPz', 'CP2', 'CP4', 'CP6'], ['P5', 'P3', 'P1', 'Pz', 'P2', 'P4', 'P6', 'PO3', 'POz','PO4'],
+                            ['T7', 'TP7', 'TP9', 'P7', 'P9'], ['T8', 'TP8', 'TP10', 'P8', 'P10'], ['PO7', 'PO9', 'O1', 'Oz', 'O2', 'PO8', 'PO10']]
+
         self.graph_fro_DEAP = [['Fp1', 'AF3'], ['Fp2', 'AF4'], ['F3', 'F7'], ['F4', 'F8'],
                                ['Fz'],
                                ['FC5', 'FC1'], ['FC6', 'FC2'], ['C3', 'Cz', 'C4'], ['CP5', 'CP1', 'CP2', 'CP6'],
@@ -50,7 +62,7 @@ class PrepareData:
         expand: expand the dimensions for deep learning models
         """
         # load the preprocessed data
-        raw = mne.io.read_raw_fif(self.data_path + "/" + self.file_name, preload=True)
+        raw = mne.io.read_raw_fif(self.data_path + "/" + self.file_name + ".fif", preload=True)
         # extract the event information from the raw data
         events, event_ids = mne.events_from_annotations(raw, event_id=event_dict)
         # extract epochs from the raw data
@@ -78,8 +90,8 @@ class PrepareData:
         print('------------------------------------------------------------------------')
         # convert labels to one-hot encodings. This is required for the loss function used in the model
         # return the data
-        return data, labels, chans, samples
-        # self.save(data, labels, 4)
+        # return data, labels, chans, samples
+        self.save(data, labels)
 
     def reorder_channel(self, data, graph):
         """
@@ -103,6 +115,8 @@ class PrepareData:
             graph_idx = self.original_order
         elif graph == 'TS':
             graph_idx = self.TS
+        elif graph == 'novel':  # new graph design
+            graph_idx = self.graph_novel
 
         idx = []
         if graph in ['BL', 'TS']:
@@ -119,9 +133,10 @@ class PrepareData:
             dataset = h5py.File('num_chan_local_graph_{}.hdf'.format(graph), 'w')
             dataset['data'] = num_chan_local_graph
             dataset.close()
+            print('idx:', idx)
         return data[:, idx, :]
 
-    def save(self, data, label, sub):
+    def save(self, data, label):
         """
         This function save the processed data into target folder
         Parameters
@@ -134,13 +149,13 @@ class PrepareData:
         None
         """
         save_path = os.getcwd()
-        data_type = 'data_{}_{}_{}'.format(self.args.data_format, self.args.dataset, self.args.label_type)
+        data_type = 'data_{}'.format(self.data_path)
         save_path = osp.join(save_path, data_type)
         if not os.path.exists(save_path):
             os.makedirs(save_path)
         else:
             pass
-        name = 'sub' + str(sub) + '.hdf'
+        name = self.file_name + '.hdf'
         save_path = osp.join(save_path, name)
         dataset = h5py.File(save_path, 'w')
         dataset['data'] = data

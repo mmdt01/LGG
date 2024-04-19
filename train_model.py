@@ -136,7 +136,7 @@ def train(args, data_train, label_train, data_val, label_val, subject, fold):
     return trlog['max_acc'], trlog['F1']
 
 
-def test(args, data, label, reproduce, subject, fold):
+def test(args, data, label, subject, fold):
     set_up(args)
     seed_all(args.random_seed)
     test_loader = get_dataloader(data, label, args.batch_size)
@@ -146,20 +146,13 @@ def test(args, data, label, reproduce, subject, fold):
         model = model.cuda()
     loss_fn = nn.CrossEntropyLoss()
 
-    if reproduce:
-        model_name_reproduce = 'sub' + str(subject) + '_fold' + str(fold) + '.pth'
-        data_type = 'model_{}_{}'.format(args.data_format, args.label_type)
-        experiment_setting = 'T_{}_pool_{}'.format(args.T, args.pool)
-        load_path_final = osp.join(args.save_path, experiment_setting, data_type, model_name_reproduce)
-        model.load_state_dict(torch.load(load_path_final))
-    else:
-        model.load_state_dict(torch.load(args.load_path_final))
+    model.load_state_dict(torch.load(args.load_path_final))
     loss, pred, act = predict(
         data_loader=test_loader, net=model, loss_fn=loss_fn
     )
     acc, f1, cm = get_metrics(y_pred=pred, y_true=act)
     print('>>> Test:  loss={:.4f} acc={:.4f} f1={:.4f}'.format(loss, acc, f1))
-    return acc, pred, act
+    return acc, f1, pred, act
 
 
 def combine_train(args, data, label, subject, fold, target_acc):
@@ -208,9 +201,9 @@ def combine_train(args, data, label, subject, fold, target_acc):
             save_model('final_model')
             # save model here for reproduce
             model_name_reproduce = 'sub' + str(subject) + '_fold' + str(fold) + '.pth'
-            data_type = 'model_{}_{}'.format(args.data_format, args.label_type)
+            # data_type = 'model_{}_{}'.format(args.data_format, args.label_type)
             experiment_setting = 'T_{}_pool_{}'.format(args.T, args.pool)
-            save_path = osp.join(args.save_path, experiment_setting, data_type)
+            save_path = osp.join(args.save_path, experiment_setting)
             ensure_path(save_path)
             model_name_reproduce = osp.join(save_path, model_name_reproduce)
             torch.save(model.state_dict(), model_name_reproduce)

@@ -19,14 +19,16 @@ class CrossValidation:
         self.data = None
         self.label = None
         self.model = None
+        self.data_path = args.data_path
+        self.file_name = args.file_name
         # Log the results per subject
         result_path = osp.join(args.save_path, 'result')
         ensure_path(result_path)
         self.text_file = osp.join(result_path,
-                                  "results_{}.txt".format(args.dataset))
+                                  "results_{}.txt".format(args.file_name))
         file = open(self.text_file, 'a')
         file.write("\n" + str(datetime.datetime.now()) +
-                   "\nTrain:Parameter setting for " + str(args.model) + ' on ' + str(args.dataset) +
+                   "\nTrain:Parameter setting for " + str(args.model) + ' on ' + str(args.file_name) +
                    "\n1)number_class:" + str(args.num_class) +
                    "\n2)random_seed:" + str(args.random_seed) +
                    "\n3)learning_rate:" + str(args.learning_rate) +
@@ -36,20 +38,19 @@ class CrossValidation:
                    "\n7)dropout:" + str(args.dropout) +
                    "\n8)hidden_node:" + str(args.hidden) +
                    "\n9)input_shape:" + str(args.input_shape) +
-                   "\n10)class:" + str(args.label_type) +
-                   "\n11)T:" + str(args.T) +
-                   "\n12)graph-type:" + str(args.graph_type) + '\n')
+                   "\n10)T:" + str(args.T) +
+                   "\n11)graph-type:" + str(args.graph_type) + '\n')
         file.close()
 
-    def load_per_subject(self, sub):
+    def load_per_subject(self):
         """
         load data for sub
-        :param sub: which subject's data to load
         :return: data and label
         """
         save_path = os.getcwd()
-        data_type = 'data_{}_{}_{}'.format(self.args.data_format, self.args.dataset, self.args.label_type)
-        sub_code = 'sub' + str(sub) + '.hdf'
+        print(self.data_path)
+        data_type = 'data_{}'.format(self.data_path)
+        sub_code = self.file_name + '.hdf'
         path = osp.join(save_path, data_type, sub_code)
         dataset = h5py.File(path, 'r')
         data = np.array(dataset['data'])
@@ -72,23 +73,23 @@ class CrossValidation:
         data_test = data[idx_test]
         label_test = label[idx_test]
 
-        if self.args.dataset == 'Att' or self.args.dataset == 'DEAP':
-            """
-            For DEAP we want to do trial-wise 10-fold, so the idx_train/idx_test is for
-            trials.
-            data: (trial, segment, 1, chan, datapoint)
-            To use the normalization function, we should change the dimension from
-            (trial, segment, 1, chan, datapoint) to (trial*segments, 1, chan, datapoint)
-            """
-            data_train = np.concatenate(data_train, axis=0)
-            label_train = np.concatenate(label_train, axis=0)
-            if len(data_test.shape) > 4:
-                """
-                When leave one trial out is conducted, the test data will be (segments, 1, chan, datapoint), hence,
-                no need to concatenate the first dimension to get trial*segments
-                """
-                data_test = np.concatenate(data_test, axis=0)
-                label_test = np.concatenate(label_test, axis=0)
+        # if self.args.dataset == 'Att' or self.args.dataset == 'DEAP':
+        #     """
+        #     For DEAP we want to do trial-wise 10-fold, so the idx_train/idx_test is for
+        #     trials.
+        #     data: (trial, segment, 1, chan, datapoint)
+        #     To use the normalization function, we should change the dimension from
+        #     (trial, segment, 1, chan, datapoint) to (trial*segments, 1, chan, datapoint)
+        #     """
+        #     data_train = np.concatenate(data_train, axis=0)
+        #     label_train = np.concatenate(label_train, axis=0)
+        #     if len(data_test.shape) > 4:
+        #         """
+        #         When leave one trial out is conducted, the test data will be (segments, 1, chan, datapoint), hence,
+        #         no need to concatenate the first dimension to get trial*segments
+        #         """
+        #         data_test = np.concatenate(data_test, axis=0)
+        #         label_test = np.concatenate(label_test, axis=0)
 
         data_train, data_test = self.normalize(train=data_train, test=data_test)
         # Prepare the data format for training the model using PyTorch
@@ -159,79 +160,68 @@ class CrossValidation:
         return train, train_label, val, val_label
 
 
-    def n_fold_CV(self, subject=[0], fold=10, shuffle=True):
+    def n_fold_CV(self, fold, shuffle):
         """
         this function achieves n-fold cross-validation
-        :param subject: how many subject to load
         :param fold: how many fold
+        :param shuffle: whether to shuffle the data before split
         """
-        # Train and evaluate the model subject by subject
-        tta = []  # total test accuracy
-        tva = []  # total validation accuracy
-        ttf = []  # total test f1
-        tvf = []  # total validation f1
+        # # Train and evaluate the model for n fold cross-validation
+        # tta = []  # total test accuracy
+        # tva = []  # total validation accuracy
+        # ttf = []  # total test f1
+        # tvf = []  # total validation f1
 
-        for sub in subject:
-            data, label = self.load_per_subject(sub)
-            va_val = Averager()
-            vf_val = Averager()
-            preds, acts = [], []
-            kf = KFold(n_splits=fold, shuffle=shuffle)
-            for idx_fold, (idx_train, idx_test) in enumerate(kf.split(data)):
-                print('Outer loop: {}-fold-CV Fold:{}'.format(fold, idx_fold))
-                data_train, label_train, data_test, label_test = self.prepare_data(
-                    idx_train=idx_train, idx_test=idx_test, data=data, label=label)
+        # for sub in subject:
+        data, label = self.load_per_subject()
+        print('>>> Data loaded and ready to train!')
+        sub = self.file_name[1:2]
+        va_val = Averager()
+        vf_val = Averager()
+        preds, acts = [], []
+        ACC, F1 = [], []
+        kf = KFold(n_splits=fold, shuffle=shuffle)
+        for idx_fold, (idx_train, idx_test) in enumerate(kf.split(data)):
+            print('Outer loop: {}-fold-CV Fold:{}'.format(fold, idx_fold))
+            data_train, label_train, data_test, label_test = self.prepare_data(
+                idx_train=idx_train, idx_test=idx_test, data=data, label=label)
 
-                if self.args.reproduce:
-                    # to reproduce the reported ACC
-                    acc_test, pred, act = test(args=self.args, data=data_test, label=label_test,
-                                               reproduce=self.args.reproduce,
-                                               subject=sub, fold=idx_fold)
-                    acc_val = 0
-                    f1_val = 0
-                else:
-                    # to train new models
-                    acc_val, f1_val = self.first_stage(data=data_train, label=label_train,
-                                                       subject=sub, fold=idx_fold)
+            # train new models
+            acc_val, f1_val = self.first_stage(data=data_train, label=label_train,
+                                                subject=sub, fold=idx_fold)
 
-                    combine_train(args=self.args,
-                                  data=data_train, label=label_train,
-                                  subject=sub, fold=idx_fold, target_acc=1)
+            combine_train(args=self.args,
+                            data=data_train, label=label_train,
+                            subject=sub, fold=idx_fold, target_acc=1)
 
-                    acc_test, pred, act = test(args=self.args, data=data_test, label=label_test,
-                                               reproduce=self.args.reproduce,
-                                               subject=sub, fold=idx_fold)
-                va_val.add(acc_val)
-                vf_val.add(f1_val)
-                preds.extend(pred)
-                acts.extend(act)
+            acc_test, f1_test, pred, act = test(args=self.args, data=data_test, label=label_test, 
+                                                subject=sub, fold=idx_fold)
+            
+            # save validation acc and f1
+            va_val.add(acc_val)
+            vf_val.add(f1_val)
+            # save the prediction and actual label
+            preds.extend(pred)
+            acts.extend(act)
 
-            tva.append(va_val.item())
-            tvf.append(vf_val.item())
-            acc, f1, _ = get_metrics(y_pred=preds, y_true=acts)
-            tta.append(acc)
-            ttf.append(f1)
-            result = '{},{}'.format(tta[-1], f1)
-            self.log2txt(result)
-
-        # prepare final report
-        tta = np.array(tta)
-        ttf = np.array(ttf)
-        tva = np.array(tva)
-        tvf = np.array(tvf)
-        mACC = np.mean(tta)
-        mF1 = np.mean(ttf)
-        std = np.std(tta)
-        mACC_val = np.mean(tva)
-        std_val = np.std(tva)
-        mF1_val = np.mean(tvf)
-
-        print('Final: test mean ACC:{} std:{}'.format(mACC, std))
-        print('Final: val mean ACC:{} std:{}'.format(mACC_val, std_val))
-        print('Final: val mean F1:{}'.format(mF1_val))
-        results = 'test mAcc={} mF1={} val mAcc={} val F1={}'.format(mACC,
-        mF1, mACC_val, mF1_val)
-        self.log2txt(results)
+            # save the results
+            result = 'Fold {}: test ACC = {}; F1-Score = {}'.format(idx_fold, acc_test, f1_test)
+            # write the results to a txt file
+            with open("save/result/s4_results.txt", "a") as file:
+                file.write(result + '\n')
+            # self.log2txt(result)
+            ACC.append(acc_test)
+            F1.append(f1_test)
+        
+        # calculate the mean acc and f1 across all folds
+        print('------------------------------------------------------------------------')
+        print('Mean: test ACC:{} F1:{}'.format(np.mean(ACC), np.mean(F1)))
+        print('------------------------------------------------------------------------')
+        # save the results
+        result = 'Mean: test ACC:{} F1:{}'.format(np.mean(ACC), np.mean(F1))
+        # self.log2txt(result)
+        with open("save/result/s4_results.txt", "a") as file:
+                file.write(result + '\n')
 
 
     def first_stage(self, data, label, subject, fold):
