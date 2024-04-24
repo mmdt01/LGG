@@ -4,7 +4,7 @@ import _pickle as cPickle
 
 from train_model import *
 from scipy import signal
-
+from matplotlib import pyplot as plt 
 
 class PrepareData:
     def __init__(self, args):
@@ -16,6 +16,7 @@ class PrepareData:
         self.model = None
         self.data_path = args.data_path
         self.file_name = args.file_name
+        self.class_labels = args.class_labels
         # self.label_type = args.label_type
 
         # self.original_order = ['Fp1', 'AF3', 'F3', 'F7', 'FC5', 'FC1', 'C3', 'T7', 'CP5', 'CP1', 'P3', 'P7', 'PO3',
@@ -50,7 +51,7 @@ class PrepareData:
         self.graph_type = args.graph_type
 
     # function for loading the raw data and preparing it into labels and epochs
-    def load_data(self, event_dict, class_labels, tmin, tmax, expand=True):
+    def load_data(self, event_dict, tmin, tmax, expand=True):
         """
         This function loads the raw data and extracts the epochs and corresponding labels
         Parameters
@@ -66,7 +67,16 @@ class PrepareData:
         # extract the event information from the raw data
         events, event_ids = mne.events_from_annotations(raw, event_id=event_dict)
         # extract epochs from the raw data
+        # change class labels from a string into a list of integers
+        class_labels = [int(i) for i in self.class_labels.split(',')]
+        print('class labels:', class_labels)
         epochs = mne.Epochs(raw, events, event_id=class_labels, tmin=tmin, tmax=tmax, baseline=None, preload=True)
+        # print the class labels
+        print('Class labels: ', epochs.event_id)
+        # plot the epochs (optional)
+        epochs.plot(n_channels=16, scalings={"eeg": 20}, title="Epochs", n_epochs=5, events=True)
+        print(epochs)
+        plt.show()
         # extract raw data. scale by 1000 due to scaling sensitivity in deep learning
         data = epochs.get_data()*1e6 # format is in (trials, channels, samples)
         # extract and normalize the labels ensuring they start from 0
